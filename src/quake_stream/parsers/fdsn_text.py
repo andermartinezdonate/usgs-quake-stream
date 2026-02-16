@@ -56,8 +56,23 @@ class FDSNTextParser(EventParser):
         source_event_id = cols[_COL_EVENT_ID]
 
         # Time: ISO 8601 format from FDSN text
-        time_str = cols[_COL_TIME]
-        origin_time = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+        time_str = cols[_COL_TIME].replace("Z", "+00:00")
+        # Normalize fractional seconds to 6 digits for Python 3.9 compatibility
+        if "." in time_str:
+            base, rest = time_str.split(".", 1)
+            # Separate fractional seconds from timezone suffix
+            frac = ""
+            tz_suffix = ""
+            for i, ch in enumerate(rest):
+                if ch in "+-Z" or rest[i:] == "+00:00":
+                    frac = rest[:i]
+                    tz_suffix = rest[i:]
+                    break
+            else:
+                frac = rest
+            frac = frac.ljust(6, "0")[:6]
+            time_str = f"{base}.{frac}{tz_suffix}"
+        origin_time = datetime.fromisoformat(time_str)
         if origin_time.tzinfo is None:
             origin_time = origin_time.replace(tzinfo=timezone.utc)
 

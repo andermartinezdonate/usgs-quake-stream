@@ -71,9 +71,9 @@ class MultiSourceProducer:
     async def _fetch_and_produce(self, client: FDSNClient, config: SourceConfig) -> None:
         """Fetch events from source and produce to Kafka."""
         now = datetime.now(timezone.utc)
-        # Look back further than poll interval to catch late-arriving events
-        lookback = max(config.poll_interval_seconds * 3, 600)
-        start_time = now - timedelta(seconds=lookback)
+        # Look back 2 hours to ensure we catch events from slower-updating sources
+        # (EMSC/GFZ report fewer events and update less frequently than USGS)
+        start_time = now - timedelta(hours=2)
 
         raw_text = await client.fetch_events(
             start_time=start_time,

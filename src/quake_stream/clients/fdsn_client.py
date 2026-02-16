@@ -70,7 +70,13 @@ class FDSNClient:
         if end_time is None:
             end_time = datetime.now(timezone.utc)
 
-        fmt = "text" if self.config.format == "fdsn_text" else "geojson"
+        # FDSN standard uses "text" or "json". USGS also accepts "geojson".
+        if self.config.format == "fdsn_text":
+            fmt = "text"
+        elif self.config.name == "usgs":
+            fmt = "geojson"
+        else:
+            fmt = "json"
         params = {
             "format": fmt,
             "starttime": start_time.strftime("%Y-%m-%dT%H:%M:%S"),
