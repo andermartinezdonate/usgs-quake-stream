@@ -1,7 +1,7 @@
-# usgs-quake-stream
+# SeisMonitor-Platform
 
 ## Project overview
-Real-time multi-source earthquake data pipeline: USGS + EMSC + GFZ → Kafka → normalization → deduplication → PostgreSQL → Streamlit.
+Multi-source earthquake monitoring platform: USGS + EMSC + GFZ ingestion, normalization, and deduplication. Supports two deployment modes: local (Kafka + PostgreSQL) and GCP serverless (Cloud Run + BigQuery + Cloud Scheduler).
 
 ## Tech stack
 - Python 3.10+, confluent-kafka, httpx, click, rich
@@ -57,6 +57,15 @@ Real-time multi-source earthquake data pipeline: USGS + EMSC + GFZ → Kafka →
 - `unified_events` — deduplicated best-estimate events
 - `event_crosswalk` — mapping: normalized → unified with match scores
 - `dead_letter_events` — events that failed validation
+
+## GCP Serverless Pipeline
+- `gcp/` — Cloud Run + BigQuery + Cloud Scheduler deployment
+  - `gcp/ingester/` — Flask app: fetch → normalize → dedupe → BigQuery (triggered every 1 min)
+  - `gcp/dashboard/` — Streamlit app reading from BigQuery unified_events
+  - `gcp/bigquery/schema.sql` — BigQuery table DDL (raw_events, unified_events, dead_letter, pipeline_runs)
+  - `gcp/deploy.sh` — One-command deployment script
+- Deploy: `export GCP_PROJECT_ID=your-project && bash gcp/deploy.sh`
+- Reuses: parsers/, models_v2.py, deduplicator.py, geo.py, sources/, map_layers.py, tectonic.py
 
 ## Conventions
 - Use `httpx` for HTTP (not requests)

@@ -1,22 +1,40 @@
-# usgs-quake-stream
+# SeisMonitor-Platform
 
-Real-time USGS earthquake data pipeline using Apache Kafka.
-
-## Quick start
-
-```bash
-pip install -e ".[dev]"
-docker compose up -d
-quake recent              # no Kafka needed
-quake produce             # start publishing to Kafka
-quake consume             # start reading from Kafka
-```
+Multi-source earthquake monitoring platform with real-time ingestion from **USGS**, **EMSC (SeismicPortal)**, and **GFZ GEOFON**. Events are normalized to a canonical schema, deduplicated across agencies, and visualized in a Streamlit dashboard.
 
 ## Architecture
 
-- **Producer** polls the USGS GeoJSON feed and publishes events to a Kafka topic.
-- **Consumer** reads from Kafka and displays earthquakes in a rich terminal table.
-- **CLI** (`quake recent`) fetches directly from USGS for quick inspection.
+Two deployment modes:
+
+### Local (Kafka + PostgreSQL)
+```
+USGS / EMSC / GFZ  →  Kafka  →  Normalizer  →  Deduplicator  →  PostgreSQL  →  Streamlit
+```
+
+### GCP Serverless (Cloud Run + BigQuery)
+```
+Cloud Scheduler (1 min)  →  Cloud Run (ingester)  →  BigQuery  →  Cloud Run (dashboard)
+```
+
+## Quick start — Local
+
+```bash
+pip install -e ".[dev]"
+docker compose up -d          # Kafka + PostgreSQL
+
+quake init-db-v2              # create multi-source tables
+quake multi-produce           # poll USGS, EMSC, GFZ → Kafka
+quake normalize               # raw → normalized_events
+quake deduplicate             # normalized → unified_events
+quake web                     # Streamlit dashboard on :8501
+```
+
+## Quick start — GCP
+
+```bash
+export GCP_PROJECT_ID=your-project-id
+bash gcp/deploy.sh            # deploys everything to GCP
+```
 
 ## Tests
 
