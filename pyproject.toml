@@ -12,6 +12,11 @@ dependencies = [
     "click>=8.1.0",
     "httpx>=0.25.0",
     "rich>=13.0.0",
+    "psycopg2-binary>=2.9.0",
+    "streamlit>=1.30.0",
+    "plotly>=5.18.0",
+    "pydeck>=0.8.0",
+    "pandas>=2.0.0",
 ]
 
 [project.optional-dependencies]

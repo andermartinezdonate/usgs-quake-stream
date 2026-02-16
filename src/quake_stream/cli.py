@@ -43,6 +43,17 @@ def recent(period: str, min_mag: float, limit: int):
 
 
 @cli.command()
+@click.option("--period", default="hour", type=click.Choice(["hour", "day", "week", "significant"]))
+@click.option("--min-mag", default=0.0, help="Minimum magnitude filter.")
+@click.option("--limit", default=25, help="Max results to display.")
+@click.option("--refresh", default=30, help="Refresh interval in seconds.")
+def dashboard(period: str, min_mag: float, limit: int, refresh: int):
+    """Live auto-refreshing earthquake dashboard (no Kafka required)."""
+    from quake_stream.dashboard import run_dashboard
+    run_dashboard(period=period, min_magnitude=min_mag, limit=limit, refresh=refresh)
+
+
+@cli.command()
 @click.option("--broker", default="localhost:9092", help="Kafka bootstrap servers.")
 @click.option("--period", default="hour", type=click.Choice(["hour", "day", "week", "significant"]))
 @click.option("--interval", default=60, help="Polling interval in seconds.")
@@ -60,3 +71,27 @@ def consume(broker: str, group: str):
     """Start the Kafka consumer (reads and displays events)."""
     from quake_stream.consumer import run_consumer
     run_consumer(bootstrap_servers=broker, group_id=group)
+
+
+@cli.command("db-consumer")
+@click.option("--broker", default="localhost:9092", help="Kafka bootstrap servers.")
+@click.option("--group", default="quake-db-writer", help="Consumer group ID.")
+def db_consumer(broker: str, group: str):
+    """Start the DB consumer (Kafka → PostgreSQL)."""
+    from quake_stream.db_consumer import run_db_consumer
+    run_db_consumer(bootstrap_servers=broker, group_id=group)
+
+
+@cli.command("web")
+@click.option("--port", default=8501, help="Streamlit port.")
+def web(port: int):
+    """Launch the Streamlit web dashboard."""
+    import subprocess
+    import sys
+    subprocess.run([
+        sys.executable, "-m", "streamlit", "run",
+        "src/quake_stream/dashboard_web.py",
+        "--server.port", str(port),
+        "--theme.base", "dark",
+        "--server.headless", "true",
+    ])
