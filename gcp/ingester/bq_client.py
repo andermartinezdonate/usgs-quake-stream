@@ -95,36 +95,28 @@ def merge_unified_events(unified_rows: list[dict]) -> int:
     project = client.project
     table = f"`{project}.{DATASET}.unified_events`"
 
-    # Build VALUES clause for the staging data
-    value_clauses = []
+    # Build SELECT UNION ALL for the staging data
+    select_clauses = []
     for r in unified_rows:
         uids_array = ", ".join(f"'{uid}'" for uid in r["source_event_uids"])
-        value_clauses.append(f"""(
-            '{r["unified_event_id"]}',
-            TIMESTAMP('{r["origin_time_utc"]}'),
-            {r["latitude"]}, {r["longitude"]}, {r["depth_km"]},
-            {r["magnitude_value"]}, '{r["magnitude_type"]}',
-            {_sql_str(r.get("place"))}, {_sql_str(r.get("region"))},
-            '{r["status"]}',
-            {r["num_sources"]}, '{r["preferred_source"]}',
-            [{uids_array}],
-            TIMESTAMP('{r["created_at"]}'),
-            TIMESTAMP('{r["updated_at"]}')
-        )""")
+        select_clauses.append(f"""SELECT
+            '{r["unified_event_id"]}' AS unified_event_id,
+            TIMESTAMP('{r["origin_time_utc"]}') AS origin_time_utc,
+            {r["latitude"]} AS latitude, {r["longitude"]} AS longitude, {r["depth_km"]} AS depth_km,
+            {r["magnitude_value"]} AS magnitude_value, '{r["magnitude_type"]}' AS magnitude_type,
+            {_sql_str(r.get("place"))} AS place, {_sql_str(r.get("region"))} AS region,
+            '{r["status"]}' AS status,
+            {r["num_sources"]} AS num_sources, '{r["preferred_source"]}' AS preferred_source,
+            [{uids_array}] AS source_event_uids,
+            TIMESTAMP('{r["created_at"]}') AS created_at,
+            TIMESTAMP('{r["updated_at"]}') AS updated_at""")
 
-    values_sql = ",\n".join(value_clauses)
+    staging_sql = "\n        UNION ALL\n        ".join(select_clauses)
 
     query = f"""
     MERGE {table} T
     USING (
-        SELECT * FROM UNNEST([
-            {values_sql}
-        ]) AS row(
-            unified_event_id, origin_time_utc, latitude, longitude, depth_km,
-            magnitude_value, magnitude_type, place, region, status,
-            num_sources, preferred_source, source_event_uids,
-            created_at, updated_at
-        )
+        {staging_sql}
     ) S
     ON T.unified_event_id = S.unified_event_id
     WHEN MATCHED THEN UPDATE SET

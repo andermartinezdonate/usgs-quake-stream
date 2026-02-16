@@ -12,9 +12,6 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-import click
-
-from quake_stream.db import get_connection
 from quake_stream.geo import haversine_km
 from quake_stream.sources import SOURCE_PRIORITY
 
@@ -157,6 +154,7 @@ def run_deduplicator(
     lookback_hours: int = 6,
 ) -> None:
     """Periodically cluster normalized events and write unified events."""
+    import click
     click.echo(
         f"Deduplicator started — running every {interval_seconds}s, "
         f"looking back {lookback_hours}h"
@@ -173,6 +171,8 @@ def run_deduplicator(
 
 def _run_dedup_cycle(lookback_hours: int) -> None:
     """Single deduplication cycle."""
+    import click
+    from quake_stream.db import get_connection
     conn = get_connection()
 
     # Load normalized events from the lookback window
