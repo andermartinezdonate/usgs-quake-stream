@@ -3,7 +3,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install dependencies
-COPY requirements.txt .
+COPY gcp/dashboard/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the shared quake_stream package (map_layers, tectonic, etc.)

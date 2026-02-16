@@ -22,7 +22,14 @@ gcloud services enable \
     artifactregistry.googleapis.com \
     --project="$PROJECT_ID"
 
-# ── 2. Create BigQuery dataset + tables ──────────────────────────────────
+# ── 2. Create Artifact Registry repo ────────────────────────────────────
+echo "--- Creating Artifact Registry repo ---"
+gcloud artifacts repositories create quake-images \
+    --repository-format=docker \
+    --location="$REGION" \
+    --project="$PROJECT_ID" 2>/dev/null || echo "Artifact Registry repo already exists"
+
+# ── 3. Create BigQuery dataset + tables ──────────────────────────────────
 echo "--- Creating BigQuery dataset ---"
 bq mk --dataset --location=US --project_id="$PROJECT_ID" \
     "${PROJECT_ID}:quake_stream" 2>/dev/null || echo "Dataset already exists"
@@ -31,14 +38,24 @@ echo "--- Creating BigQuery tables ---"
 bq query --use_legacy_sql=false --project_id="$PROJECT_ID" \
     < "$REPO_ROOT/gcp/bigquery/schema.sql"
 
-# ── 3. Build and deploy the ingester ─────────────────────────────────────
-echo "--- Deploying ingester to Cloud Run ---"
+# ── 4. Build and deploy the ingester ─────────────────────────────────────
+echo "--- Building ingester image ---"
+INGESTER_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/quake-images/ingest-quakes:latest"
 
-# Build from repo root so Docker can access src/quake_stream/
 cd "$REPO_ROOT"
+gcloud builds submit \
+    --project="$PROJECT_ID" \
+    --config=/dev/stdin \
+    . <<EOF
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '$INGESTER_IMAGE', '-f', 'gcp/ingester/Dockerfile', '.']
+images: ['$INGESTER_IMAGE']
+EOF
+
+echo "--- Deploying ingester to Cloud Run ---"
 gcloud run deploy ingest-quakes \
-    --source=. \
-    --dockerfile=gcp/ingester/Dockerfile \
+    --image="$INGESTER_IMAGE" \
     --region="$REGION" \
     --memory=512Mi \
     --cpu=1 \
@@ -54,7 +71,7 @@ INGESTER_URL=$(gcloud run services describe ingest-quakes \
     --format='value(status.url)')
 echo "Ingester URL: $INGESTER_URL"
 
-# ── 4. Create scheduler service account ──────────────────────────────────
+# ── 5. Create scheduler service account ──────────────────────────────────
 echo "--- Setting up Cloud Scheduler ---"
 
 SA_EMAIL="quake-scheduler@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -71,7 +88,7 @@ gcloud run services add-iam-policy-binding ingest-quakes \
     --role="roles/run.invoker" \
     --project="$PROJECT_ID"
 
-# ── 5. Create Cloud Scheduler job ────────────────────────────────────────
+# ── 6. Create Cloud Scheduler job ────────────────────────────────────────
 echo "--- Creating Cloud Scheduler job (every 1 minute) ---"
 
 # Delete existing job if it exists
@@ -86,17 +103,28 @@ gcloud scheduler jobs create http quake-ingest-every-minute \
     --oidc-service-account-email="$SA_EMAIL" \
     --attempt-deadline=60s \
     --max-retry-attempts=3 \
-    --min-backoff-duration=10s \
-    --max-backoff-duration=30s \
+    --min-backoff=10s \
+    --max-backoff=30s \
     --project="$PROJECT_ID"
 
-# ── 6. Deploy the Streamlit dashboard ────────────────────────────────────
-echo "--- Deploying dashboard to Cloud Run ---"
+# ── 7. Deploy the Streamlit dashboard ────────────────────────────────────
+echo "--- Building dashboard image ---"
+DASHBOARD_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/quake-images/quake-dashboard:latest"
 
 cd "$REPO_ROOT"
+gcloud builds submit \
+    --project="$PROJECT_ID" \
+    --config=/dev/stdin \
+    . <<EOF
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '$DASHBOARD_IMAGE', '-f', 'gcp/dashboard/Dockerfile', '.']
+images: ['$DASHBOARD_IMAGE']
+EOF
+
+echo "--- Deploying dashboard to Cloud Run ---"
 gcloud run deploy quake-dashboard \
-    --source=. \
-    --dockerfile=gcp/dashboard/Dockerfile \
+    --image="$DASHBOARD_IMAGE" \
     --region="$REGION" \
     --memory=512Mi \
     --cpu=1 \
@@ -112,7 +140,7 @@ DASHBOARD_URL=$(gcloud run services describe quake-dashboard \
     --region="$REGION" --project="$PROJECT_ID" \
     --format='value(status.url)')
 
-# ── 7. Test the pipeline ─────────────────────────────────────────────────
+# ── 8. Test the pipeline ─────────────────────────────────────────────────
 echo ""
 echo "--- Testing pipeline (manual trigger) ---"
 

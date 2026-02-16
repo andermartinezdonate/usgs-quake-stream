@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS `quake_stream.raw_events` (
     raw_payload         STRING
 )
 PARTITION BY DATE(origin_time_utc)
-CLUSTER BY source, magnitude_value
+CLUSTER BY source, status
 OPTIONS (
     partition_expiration_days = 90,
     description = "Append-only log of normalized earthquake events from all sources"
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS `quake_stream.unified_events` (
     updated_at          TIMESTAMP NOT NULL
 )
 PARTITION BY DATE(origin_time_utc)
-CLUSTER BY magnitude_value
+CLUSTER BY preferred_source
 OPTIONS (
     partition_expiration_days = 365,
     description = "Deduplicated best-estimate earthquake events"
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS `quake_stream.dead_letter_events` (
     source              STRING NOT NULL,
     source_event_id     STRING,
     raw_payload         STRING NOT NULL,
-    error_messages      ARRAY<STRING> NOT NULL,
+    error_messages      ARRAY<STRING>,
     created_at          TIMESTAMP NOT NULL
 )
 PARTITION BY DATE(created_at)
