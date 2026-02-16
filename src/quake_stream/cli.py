@@ -95,3 +95,41 @@ def web(port: int):
         "--theme.base", "dark",
         "--server.headless", "true",
     ])
+
+
+# ── Multi-source (v2) commands ───────────────────────────────────────────
+
+
+@cli.command("init-db-v2")
+def init_db_v2():
+    """Create the multi-source database tables (v2 schema)."""
+    from quake_stream.db import init_multi_source_db
+    init_multi_source_db()
+    console.print("[green]Multi-source tables created successfully.[/green]")
+
+
+@cli.command("multi-produce")
+@click.option("--broker", default="localhost:9092", help="Kafka bootstrap servers.")
+@click.option("--min-mag", default=0.0, help="Minimum magnitude filter.")
+def multi_produce(broker: str, min_mag: float):
+    """Start the multi-source Kafka producer (polls USGS, EMSC, GFZ)."""
+    from quake_stream.multi_producer import run_multi_producer
+    run_multi_producer(bootstrap_servers=broker, min_magnitude=min_mag)
+
+
+@cli.command("normalize")
+@click.option("--broker", default="localhost:9092", help="Kafka bootstrap servers.")
+@click.option("--group", default="quake-normalizer", help="Consumer group ID.")
+def normalize(broker: str, group: str):
+    """Start the normalizer consumer (raw_earthquakes → normalized_events)."""
+    from quake_stream.normalizer import run_normalizer
+    run_normalizer(bootstrap_servers=broker, group_id=group)
+
+
+@cli.command("deduplicate")
+@click.option("--interval", default=300, help="Dedup cycle interval in seconds.")
+@click.option("--lookback", default=6, help="Hours to look back for clustering.")
+def deduplicate(interval: int, lookback: int):
+    """Start the periodic deduplicator (normalized → unified events)."""
+    from quake_stream.deduplicator import run_deduplicator
+    run_deduplicator(interval_seconds=interval, lookback_hours=lookback)

@@ -112,3 +112,62 @@ def get_stats() -> dict:
                 FROM earthquakes
             """)
             return dict(cur.fetchone())
+
+
+# ── Multi-source (v2) functions ──────────────────────────────────────────
+
+
+def init_multi_source_db() -> None:
+    """Create the 5 new tables for multi-source ingestion."""
+    import pathlib
+    sql_path = pathlib.Path(__file__).parent / "migrations" / "001_multi_source.sql"
+    sql = sql_path.read_text()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+        conn.commit()
+
+
+def query_unified_events(
+    hours: Optional[int] = 24,
+    min_magnitude: float = 0.0,
+) -> list[dict]:
+    """Query deduplicated unified events."""
+    with get_connection() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            query = """
+                SELECT unified_event_id, origin_time_utc, latitude, longitude,
+                       depth_km, magnitude_value, magnitude_type, place, region,
+                       status, num_sources, preferred_source, preferred_event_uid,
+                       created_at, updated_at
+                FROM unified_events
+                WHERE magnitude_value >= %s
+            """
+            params: list = [min_magnitude]
+
+            if hours is not None:
+                query += " AND origin_time_utc >= NOW() - INTERVAL '%s hours'"
+                params.append(hours)
+
+            query += " ORDER BY origin_time_utc DESC"
+            cur.execute(query, params)
+            return [dict(row) for row in cur.fetchall()]
+
+
+def get_unified_stats() -> dict:
+    """Get summary statistics from unified_events."""
+    with get_connection() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT
+                    COUNT(*) as total,
+                    COALESCE(MAX(magnitude_value), 0) as max_magnitude,
+                    COALESCE(AVG(magnitude_value), 0) as avg_magnitude,
+                    COUNT(*) FILTER (WHERE num_sources > 1) as multi_source_count,
+                    COALESCE(MAX(num_sources), 0) as max_sources,
+                    COUNT(*) FILTER (WHERE magnitude_value >= 5.0) as count_m5_plus,
+                    COUNT(*) FILTER (WHERE magnitude_value >= 3.0 AND magnitude_value < 5.0) as count_m3_to_5,
+                    COUNT(*) FILTER (WHERE magnitude_value < 3.0) as count_below_m3
+                FROM unified_events
+            """)
+            return dict(cur.fetchone())
