@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/quake_stream/ /app/quake_stream/
 
 # Copy the ingester code
-COPY gcp/ingester/main.py gcp/ingester/pipeline.py gcp/ingester/bq_client.py /app/
+COPY gcp/ingester/main.py gcp/ingester/pipeline.py gcp/ingester/bq_client.py gcp/ingester/source_pipeline.py /app/
 
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
