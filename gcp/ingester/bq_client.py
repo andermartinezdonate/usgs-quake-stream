@@ -315,5 +315,5 @@ def _sql_str(val) -> str:
     """Escape a string for SQL, or return NULL."""
     if val is None:
         return "NULL"
-    escaped = str(val).replace("'", "\\'").replace("\\", "\\\\")
+    escaped = str(val).replace("'", "''")
     return f"'{escaped}'"

@@ -48,7 +48,7 @@ def _table(name: str) -> str:
 def _sql_str(val) -> str:
     if val is None:
         return "NULL"
-    escaped = str(val).replace("'", "\\'").replace("\\", "\\\\")
+    escaped = str(val).replace("'", "''")
     return f"'{escaped}'"
 
 
@@ -166,17 +166,22 @@ def _merge_unified_events(unified_rows: list[dict]) -> int:
         select_clauses.append(f"""SELECT
             '{r["unified_event_id"]}' AS unified_event_id,
             TIMESTAMP('{r["origin_time_utc"]}') AS origin_time_utc,
-            {r["latitude"]} AS latitude, {r["longitude"]} AS longitude, {r["depth_km"]} AS depth_km,
-            {r["magnitude_value"]} AS magnitude_value, '{r["magnitude_type"]}' AS magnitude_type,
-            {_sql_str(r.get("place"))} AS place, {_sql_str(r.get("region"))} AS region,
+            CAST({r["latitude"]} AS FLOAT64) AS latitude,
+            CAST({r["longitude"]} AS FLOAT64) AS longitude,
+            CAST({r["depth_km"]} AS FLOAT64) AS depth_km,
+            CAST({r["magnitude_value"]} AS FLOAT64) AS magnitude_value,
+            '{r["magnitude_type"]}' AS magnitude_type,
+            {_sql_str(r.get("place"))} AS place,
+            {_sql_str(r.get("region"))} AS region,
             '{r["status"]}' AS status,
-            {r["num_sources"]} AS num_sources, '{r["preferred_source"]}' AS preferred_source,
+            CAST({r["num_sources"]} AS INT64) AS num_sources,
+            '{r["preferred_source"]}' AS preferred_source,
             [{uids_array}] AS source_event_uids,
-            {r.get("magnitude_std", 0.0)} AS magnitude_std,
-            {r.get("location_spread_km", 0.0)} AS location_spread_km,
-            {r.get("source_agreement_score", 0.0)} AS source_agreement_score,
-            TIMESTAMP('{r["created_at"]}') AS created_at,
-            TIMESTAMP('{r["updated_at"]}') AS updated_at""")
+            CAST({r.get("magnitude_std", 0.0)} AS FLOAT64) AS magnitude_std,
+            CAST({r.get("location_spread_km", 0.0)} AS FLOAT64) AS location_spread_km,
+            CAST({r.get("source_agreement_score", 0.0)} AS FLOAT64) AS source_agreement_score,
+            CURRENT_TIMESTAMP() AS created_at,
+            CURRENT_TIMESTAMP() AS updated_at""")
 
     staging_sql = "\n        UNION ALL\n        ".join(select_clauses)
 
@@ -202,8 +207,20 @@ def _merge_unified_events(unified_rows: list[dict]) -> int:
         magnitude_std = S.magnitude_std,
         location_spread_km = S.location_spread_km,
         source_agreement_score = S.source_agreement_score,
-        updated_at = S.updated_at
-    WHEN NOT MATCHED THEN INSERT ROW
+        updated_at = CURRENT_TIMESTAMP()
+    WHEN NOT MATCHED THEN INSERT (
+        unified_event_id, origin_time_utc, latitude, longitude, depth_km,
+        magnitude_value, magnitude_type, place, region, status,
+        num_sources, preferred_source, source_event_uids,
+        magnitude_std, location_spread_km, source_agreement_score,
+        created_at, updated_at
+    ) VALUES (
+        S.unified_event_id, S.origin_time_utc, S.latitude, S.longitude, S.depth_km,
+        S.magnitude_value, S.magnitude_type, S.place, S.region, S.status,
+        S.num_sources, S.preferred_source, S.source_event_uids,
+        S.magnitude_std, S.location_spread_km, S.source_agreement_score,
+        CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP()
+    )
     """
 
     job = client.query(query)
