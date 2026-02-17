@@ -797,8 +797,7 @@ with tab_coverage:
             ))
 
         fig_coverage.update_layout(
-            **CHART_LAYOUT,
-            height=500,
+            **{**CHART_LAYOUT, "height": 500},
             title=dict(text="Event Coverage by Source", font=dict(size=13, color="#e6edf3")),
             geo=dict(
                 bgcolor="rgba(0,0,0,0)",
